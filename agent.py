@@ -10,7 +10,7 @@ import os
 import pythoncom
 
 import pandas as pd
-from utils import get_api_key, get_model_name, save_png, log_err, init_com
+from utils import get_api_key, get_model_name, save_png, log_agent_err, init_com
 import xl
 
 FILE_PATH = os.path.join("EXCEL_REPO", "file.xlsx")
@@ -109,7 +109,7 @@ def drop_column(
         xl.delete_column(sheet, xl_col_idx)
         return True
     except Exception as err:
-        log_err(err)
+        log_agent_err(err)
         return False
 
 
@@ -140,25 +140,29 @@ def add_column(col_name: str,data: str, state: Annotated[AgentState, InjectedSta
             return True
         return False
     except Exception as err:
-        log_err(err)
+        log_agent_err(err)
         return False
             
 
 @tool
-def drop_row(index: Union[int, float, str], state: Annotated[AgentState, InjectedState]) -> bool:
+def drop_row(idx: Union[int, float, str], sheet_name: str, state: Annotated[AgentState, InjectedState]) -> bool:
     """_summary_
 
     Args:
-        index (Union[int, float, str]): row index
+        idx (Union[int, float, str]): row index
         state (Annotated[AgentState, InjectedState]): agent's state
 
     Returns:
         bool: acknowledgement
     """
-    df = state["data_frame"]
-    if df is not None:
-        df.drop(index = index, axis = 0, inplace = True)
-    return False
+    try:
+        book = xl.open_book()
+        sheet = book.sheets[sheet_name] if sheet_name else book.sheets[0]
+
+        return xl.del_row(sheet, idx)
+    except Exception as err:
+        log_agent_err(err)
+        return False
 
 @tool
 def add_row(data: list[list], state: Annotated[AgentState, InjectedState]) -> bool:

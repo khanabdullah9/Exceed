@@ -50,6 +50,9 @@ def save_png(agent):
 def log_err(err_msg: Union[Exception|str]):
     logger.error(err_msg)
 
+def log_agent_err(err_msg: Union[Exception|str]):
+    logger.error(str(err_msg)+" [source: agent]")
+
 def init_com(func):
     @wraps(func)
     def wrapper(*args, **kwargs):

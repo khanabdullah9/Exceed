@@ -25,5 +25,8 @@ while True:
         messages = [HumanMessage(content = prompt)],
         data_frame = data_frame
     ))
-    pprint(response)
-    
+    # pprint(response)
+
+    if response:
+        for msg in response["messages"][::-1]:
+            pprint(msg)
