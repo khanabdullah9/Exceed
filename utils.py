@@ -5,6 +5,8 @@ import logging
 from typing import Union
 import pythoncom
 from functools import wraps
+import numpy as np
+import pandas as pd
 
 # 1. Setup the Root Logger to a high level (to silence the server/libraries)
 logging.basicConfig(level=logging.WARNING) 
@@ -43,7 +45,7 @@ def get_model_name():
 
 def save_png(agent):
     png_data = agent.get_graph().draw_mermaid_png()
-    with open("graph.png","wb") as png:
+    with open(os.path.join("graph_pngs","graph.png"),"wb") as png:
         png.write(png_data)
     print("Image saved!")
 
@@ -52,6 +54,12 @@ def log_err(err_msg: Union[Exception|str]):
 
 def log_agent_err(err_msg: Union[Exception|str]):
     logger.error(str(err_msg)+" [source: agent]")
+
+def log_xl_err(err_msg: Union[Exception|str]):
+    logger.error(str(err_msg)+" [source: xl]")
+
+def log_info(txt: str):
+    logger.info(txt)
 
 def init_com(func):
     @wraps(func)
@@ -83,5 +91,24 @@ def parse_lst(str_lst: str) -> list[str]:
     except Exception as err:
         pass
 
-    print(f"parsed list {parsed_lst}")
+    # print(f"parsed list {parsed_lst}")
     return parsed_lst
+
+def parse_number_arr(lst: list[str]) -> np.array:
+    try:
+        # return np.array(lst, dtype = "float")
+        return pd.Series(lst, dtype = "float")
+    except Exception:
+        pass
+
+def calc_arr_mean(lst: list[any]) -> float:
+    sum = 0
+    count = 0
+    for elem in lst:
+        if isinstance(elem, int) or isinstance(elem, float):
+            sum += elem
+            count += 1
+    return sum / count if count > 0 else 0
+
+def replace_missing(lst: list[any], mean: float) -> list[any]:
+    return list(map(lambda x: mean if x == None else x, lst))

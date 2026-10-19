@@ -7,10 +7,9 @@ from langchain.tools import tool
 from langchain_groq import ChatGroq
 import xlwings as xw
 import os
-import pythoncom
 
 import pandas as pd
-from utils import get_api_key, get_model_name, save_png, log_agent_err, init_com
+from utils import get_api_key, get_model_name, save_png, log_agent_err, init_com, log_info
 import xl
 
 FILE_PATH = os.path.join("EXCEL_REPO", "file.xlsx")
@@ -25,48 +24,93 @@ class AgentState(TypedDict):
     data_frame: pd.DataFrame
 
 #tools section
+## self-assistance
+@tool
+def get_column_names(state: Annotated[AgentState, InjectedState]) -> list[str]:
+    """Return names of the column from the df
+
+    Args:
+        state (Annotated[AgentState, InjectedState]): agent's state
+
+    Returns:
+        list[str]: names of the columns
+    """
+    df = state["data_frame"]
+    return df.columns if df is not None else []
+
 ## data cleaning
 @tool
-def handle_missing_values(col_name: str, state: Annotated[AgentState, InjectedState]) -> None:
+@init_com
+def handle_missing_values(col_name: str, state: Annotated[AgentState, InjectedState], sheet_name: str = "") -> bool:
     """Handle missing values in a column
 
     Args:
         col_name (str): column name,
         state (Annotated[AgentState, InjectedState]): agent's state
+        sheet_name (str): sheet name (optional)
     """
     df = state["data_frame"]
-    if df is not None:
-        df[col_name] = df[col_name].fillna(df[col_name].mean())
+    if df is None:
+        return False
+
+    try:
+        book = xl.open_book()
+        sheet = book.sheets[sheet_name] if sheet_name else book.sheets[0]
+
+        col_idx = df.columns.tolist().index(col_name)
+        xl_col_name = chr(65+col_idx)
+
+        return xl.fill_missing_values(sheet, col_range = xl_col_name) # logic needs col name and not range
+    except Exception as err:
+        log_agent_err(err)
+        return False
 
 @tool
-def handle_date_format(col_name: str, format: str, state: Annotated[AgentState, InjectedState]) -> None:
-    """Standardise the date format for the date related column
+@init_com
+def handle_date_format(col_name: str,  state: Annotated[AgentState, InjectedState], sheet_name: str = "") -> None:
+    """Standardise the date format for the date related column.
+       Note: You can call 'get_column_names' to get the column names
 
     Args:
         col_name (str): column name,
-        format (str): python time strftime format
         state (Annotated[AgentState, InjectedState]): agent's state
+        sheet_name (str): name of the sheet (optional)
     """
     df = state["data_frame"]
+    if df is None:
+        return False
+    
     try:
-        if df is not None:
-            df[col_name] = pd.to_datetime(df[col_name], format = format)
-    except Exception:
-        pass
+        col_idx = df.columns.to_list().index(col_name)
+        col_name = chr(col_idx+65)
+        col_range = f"{col_name}2:{col_name}{df.shape[1]+1}"
+        log_info(col_range)
+
+        book = xl.open_book()
+        sheet = book.sheets[sheet_name] if sheet_name else book.sheets[0]
+
+        return xl.fix_dates(sheet, col_range = col_range)
+    except Exception as err:
+        log_agent_err(err)
 
 
 ## Analyse
 @tool
-def get_summary_stats(state: Annotated[AgentState, InjectedState], col_name: str = "") -> None:
-    """Returns descriptive statistics of a column or the entire dataset
+def get_summary_stats(state: Annotated[AgentState, InjectedState], col_name: str = "") -> bool:
+    """Displays descriptive statistics of a column or the entire dataset using xlwings
 
     Args:
         state (Annotated[AgentState, InjectedState]): agent's state
         col_name (str, optional): column name. Defaults to "".
+
+    Returns:
+        bool: acknowledgement
     """
     df = state["data_frame"]
     if df is not None:
         xl.display(df[col_name].describe()) if col_name else xl.display(df.describe())
+        return True
+    return False
 
 
 @tool
@@ -181,22 +225,6 @@ def add_row(data: list[list], state: Annotated[AgentState, InjectedState]) -> bo
         return True
     return False
 
-## write content
-@tool
-def write_data(state: Annotated[AgentState, InjectedState]) -> bool:
-    """Write the modified data back to the excel file
-
-    Args:
-        state (Annotated[AgentState, InjectedState]): agent's state
-
-    Returns:
-        bool: acknowledgement
-    """
-    df = state["data_frame"]
-    if df is not None:
-        df.to_excel(FILE_PATH)
-        return True
-    return False
 
 tool_list = [add_row, 
              drop_row, 
@@ -205,7 +233,7 @@ tool_list = [add_row,
              get_summary_stats,
              handle_date_format, 
              handle_missing_values,
-             write_data]
+             get_column_names]
 llm_with_tools = llm.bind_tools(tool_list)
 
 def llm_invoke(state: AgentState) -> AgentState:
@@ -222,9 +250,10 @@ def llm_invoke(state: AgentState) -> AgentState:
                 5. get_summary_stats: get descriptive statistics,
                 6. handle_date_format: standardise the date format, 
                 7. handle_missing_values: fill missing values
-                8. write_data: write the modified content back to the same file
+                8. get_column_names: returns list of the column names
 
-                Never respond to 'out of context' questions/queries
+                Never respond to 'out of context' questions/queries.
+                If the tool returns true do not call again.
                                       """)
     state["messages"].append(
         llm_with_tools.invoke([sys_msg] + state["messages"])
@@ -250,10 +279,9 @@ graph.add_conditional_edges("llm_invoke",
                                 "tool_node": "tool_node",
                                 END: END
                             })
-graph.add_edge("llm_invoke", END)
-graph.add_edge("tool_node", END)
+graph.add_edge("tool_node", "llm_invoke")
 
 agent = graph.compile()
 
 
-# save_png()
+# save_png(agent)
