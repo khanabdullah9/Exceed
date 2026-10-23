@@ -4,9 +4,18 @@ import numpy as np
 import os
 import utils
 from typing import Union
+import matplotlib.pyplot as plt
+import time
 
-def display(df: pd.DataFrame) -> None:
-    xw.view(df)
+def create_sheet_name(sheet_name: str):
+    # return sheet_name + time.strftime("%M%S")
+    return time.strftime("%M%S")
+
+def display(df: pd.DataFrame, book: xw.Book = None, sheet_name: str = "") -> None:
+    if (book is not None) and (sheet_name.strip() != ""):
+        book.sheets.add(name = create_sheet_name(sheet_name)).range("A1").value = df
+    else:
+        xw.view(df)
 
 def open_book(file_path = os.path.join("EXCEL_REPO", "file.xlsx")):
     return xw.Book(file_path)
@@ -95,3 +104,11 @@ def fill_missing_values(sheet: xw.Sheet, col_range: str) -> bool:
     except Exception as err:
         utils.log_xl_err(err)
         return False
+
+def plot_line(col_x: str, col_y: str, book: xw.Book, sheet_name: str):
+    fig = plt.figure()
+    plt.plot(col_x, col_y)
+
+    book.sheets.add(name = sheet_name)
+    sheet = book.sheets[create_sheet_name(sheet_name)]
+    sheet.pictures.add(fig, name = f"{col_x}-{col_y}")

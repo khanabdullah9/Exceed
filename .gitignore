@@ -11,7 +11,9 @@ wheels/
 
 .env
 EXCEL_REPO/
+graph_pngs/
 *.png
 *.xlsx
 manual_test.py
 *.log
+TODO/

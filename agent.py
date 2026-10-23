@@ -225,7 +225,6 @@ def add_row(data: list[list], state: Annotated[AgentState, InjectedState]) -> bo
         return True
     return False
 
-
 tool_list = [add_row, 
              drop_row, 
              add_column, 

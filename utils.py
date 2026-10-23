@@ -7,6 +7,7 @@ import pythoncom
 from functools import wraps
 import numpy as np
 import pandas as pd
+import platform
 
 # 1. Setup the Root Logger to a high level (to silence the server/libraries)
 logging.basicConfig(level=logging.WARNING) 
@@ -112,3 +113,24 @@ def calc_arr_mean(lst: list[any]) -> float:
 
 def replace_missing(lst: list[any], mean: float) -> list[any]:
     return list(map(lambda x: mean if x == None else x, lst))
+
+def create_todo_path(file_path: str):
+    if platform.system() == "Windows":
+        file_name = file_path.split("\\")[-1]+"_todo.txt"
+    else:
+        file_name = file_path.split("/")[-1]+"_todo.txt"
+    return file_name
+
+def write_todo(file_name: str, content: Union[str|list], mode = "w"):
+    with open(os.path.join("TODO", file_name), mode, encoding = "utf-8") as todo:
+        if isinstance(content, str):
+            todo.write(content)
+        elif isinstance(content, list):
+            for cont in content:
+                todo.write(cont)
+
+def read_todo(file_path: str) -> str:
+    file_name = create_todo_path(file_path)
+
+    with open(os.path.join("TODO", file_name), "r") as todo:
+        return todo.read()
